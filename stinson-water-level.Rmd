@@ -1,0 +1,711 @@
+---
+title: "stinson-water-level"
+author: "Jessica Bullington"
+date: "4/20/2023"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+rm(list=ls()) # clear workspace
+#setwd("/Users/jessicabullington/Documents/GitHub/Stinson-microbiome")
+#dirPath <- "~/Documents/GitHub/Stinson-microbiome"
+
+```
+
+## Set up
+
+```{r load libraries}
+library(ggplot2)
+library(dplyr)
+library(viridis)
+library(GGally) # ggpairs
+library(gridExtra)
+library(tidyr)
+```
+
+```{r load data}
+# compute timestamp using https://www.epochconverter.com and increment in excel (5min=300s)
+list.files()
+Feb_MW9_raw = read.csv("Green_MW9_220222-040322_date.csv")
+Feb_MW6_raw = read.csv("Red_MW6_220222-040322_date.csv")
+Feb_W1_raw = read.csv("Blue_W1_220222-040322_date.csv")
+Feb_W4_raw = read.csv("Yellow_W4_220222-280222_date.csv")
+
+Oct_W1_raw = read.csv("Yellow_W1_Oct_2022_date.csv")
+Oct_W2_raw = read.csv("Green_W2_Oct_2022_date.csv")
+Oct_W3_raw = read.csv("Red_W3_Oct_2022_date.csv")
+Oct_W4_raw = read.csv("Blue_W4_Oct_2022_date.csv")
+```
+
+```{r convert ts to date}
+#Sys.timezone() #America/Los_Angeles #PST8PDT
+Feb_MW9_raw$dateFull = as.POSIXct(Feb_MW9_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01")
+Feb_MW6_raw$dateFull = as.POSIXct(Feb_MW6_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01")
+Feb_W1_raw$dateFull = as.POSIXct(Feb_W1_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+Feb_W4_raw$dateFull = as.POSIXct(Feb_W4_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+Oct_W1_raw$dateFull = as.POSIXct(Oct_W1_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01")
+Oct_W2_raw$dateFull = as.POSIXct(Oct_W2_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01")
+Oct_W3_raw$dateFull = as.POSIXct(Oct_W3_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+Oct_W4_raw$dateFull = as.POSIXct(Oct_W4_raw$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+```
+
+```{r raw plot}
+ggplot(Feb_MW9_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+ggplot(Feb_MW6_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+ggplot(Feb_W1_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+ggplot(Feb_W4_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+
+ggplot(Oct_W1_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+ggplot(Oct_W2_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+ggplot(Oct_W3_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+ggplot(Oct_W4_raw, aes(dateFull, height_m)) + geom_point(pch=20) + theme_bw()
+```
+
+
+```{r elevation corrections}
+# subtract air pressure
+Feb_MW9_raw$height_air = mean(Feb_MW9_raw$height_m[1:5])
+Feb_MW6_raw$height_air = mean(Feb_MW6_raw$height_m[1:5])
+Feb_W1_raw$height_air = mean(Feb_W1_raw$height_m[1:5])
+Feb_W4_raw$height_air = mean(Feb_W4_raw$height_m[1:5])
+
+Oct_W1_raw$height_air = mean(Oct_W1_raw$height_m[1:5])
+Oct_W2_raw$height_air = mean(Oct_W2_raw$height_m[1:5])
+Oct_W3_raw$height_air = mean(Oct_W3_raw$height_m[1:5])
+Oct_W4_raw$height_air = mean(Oct_W4_raw$height_m[(nrow(Oct_W4_raw)-5):nrow(Oct_W4_raw)])
+
+# standardize to MSL (values from sampling logistics spreadsheet string measurements minus top of PVC to MSL)
+# https://docs.google.com/spreadsheets/d/1XzVqk38hj58fnGgdc_22KlgGdjaTgPGWZm7sDe5TOUk/edit?usp=sharing
+# https://docs.google.com/spreadsheets/d/116PvqrL-J8iXvcpYYv-wyb7DdC-2QIN_HuRHwAJRZLo/edit?usp=sharing
+Feb_MW9_raw$height_real = Feb_MW9_raw$height_m - Feb_MW9_raw$height_air - 3.075177995 # deeper than MSL so subtract
+Feb_MW6_raw$height_real = Feb_MW6_raw$height_m - Feb_MW6_raw$height_air + 0.432054 # shallower than MSL so add
+Feb_W1_raw$height_real = Feb_W1_raw$height_m - Feb_W1_raw$height_air - 0.2988945
+Feb_W4_raw$height_real = Feb_W4_raw$height_m - Feb_W4_raw$height_air + 0.079248
+  
+Oct_W1_raw$height_real = Oct_W1_raw$height_m - Oct_W1_raw$height_air - 0.19812
+Oct_W2_raw$height_real = Oct_W2_raw$height_m - Oct_W2_raw$height_air - 0.295656
+Oct_W3_raw$height_real = Oct_W3_raw$height_m - Oct_W3_raw$height_air - 0.27432
+Oct_W4_raw$height_real = Oct_W4_raw$height_m - Oct_W4_raw$height_air - 0.088392
+
+# trim to deployment period (manually look for where to trim)
+Feb_MW9 = subset(Feb_MW9_raw, Feb_MW9_raw$ts > 1645584776 & Feb_MW9_raw$ts < 1646417576)
+Feb_MW6 = subset(Feb_MW6_raw, Feb_MW6_raw$ts > 1645643530 & Feb_MW6_raw$ts < 1646418130)
+Feb_W1 = subset(Feb_W1_raw, Feb_W1_raw$ts > 1645584513 & Feb_W1_raw$ts < 1646414313)
+Feb_W4 = subset(Feb_W4_raw, Feb_W4_raw$ts > 1645584030 & Feb_W4_raw$ts < 1646093130)
+
+Oct_W1 = subset(Oct_W1_raw, Oct_W1_raw$ts > 1665367080 & Oct_W1_raw$ts < 1666121580)
+Oct_W2 = subset(Oct_W2_raw, Oct_W2_raw$ts > 1665366480 & Oct_W2_raw$ts < 1666121820)
+Oct_W3 = subset(Oct_W3_raw, Oct_W3_raw$ts > 1665364920 & Oct_W3_raw$ts < 1666122180)
+Oct_W4 = subset(Oct_W4_raw, Oct_W4_raw$ts < 1666122660)
+
+# check for disturbances
+ggplot(Feb_MW9, aes(dateFull, height_real)) + geom_point(pch=20) + theme_bw() # disturbed
+ggplot(Feb_MW6, aes(dateFull, height_real)) + geom_point(pch=20) + theme_bw() # disturbed
+ggplot(Feb_W1, aes(dateFull, height_real)) + geom_line() + theme_bw()
+ggplot(Feb_W4, aes(dateFull, height_real)) + geom_line() + theme_bw()
+
+ggplot(Oct_W1, aes(dateFull, height_real)) + geom_line() + theme_bw()
+ggplot(Oct_W2, aes(dateFull, height_real)) + geom_line() + theme_bw()
+ggplot(Oct_W3, aes(dateFull, height_real)) + geom_line() + theme_bw()
+ggplot(Oct_W4, aes(dateFull, height_real)) + geom_line() + theme_bw()
+
+# adjust for disturbances
+Feb_MW9 = subset(Feb_MW9, Feb_MW9$height_real > 0.5)
+ggplot(Feb_MW9, aes(dateFull, height_real)) + geom_point(pch=20) + theme_bw() # could be better
+
+remove = c(1646159830,1646160130,1646160430,1646160730,1646161030,1646161330,1646161630,1646161930,1646162230,1646162530,1646162830,1646163130) # for MW6
+Feb_MW6 = subset(Feb_MW6, !(Feb_MW6$ts %in% remove)) 
+ggplot(Feb_MW6, aes(dateFull, height_real)) + geom_point(pch=20) + theme_bw() # good
+
+```
+
+
+```{r combine data with sampling times}
+# add location variable
+Feb_W1$Location <- "W1"
+Feb_W4$Location <- "W4"
+Feb_MW9$Location <- "MW9"
+Feb_MW6$Location <- "MW6"
+
+Oct_W1$Location <- "W1"
+Oct_W2$Location <- "W2"
+Oct_W3$Location <- "W3"
+Oct_W4$Location <- "W4"
+
+# combine to one file for each campaign
+Feb <- rbind.data.frame(Feb_W1, Feb_W4)
+Oct <- rbind.data.frame(Oct_W1, Oct_W2, Oct_W3, Oct_W4)
+Oct <- rbind.data.frame(Oct_W1, Oct_W4) # NOTE: comment out to use all 4 wells!!
+
+# times for discerete sample collection
+sampled = read.csv("Stinson_Chem_all_2023.04.09.csv")
+sampled$dateFull = as.POSIXct(sampled$Epoch_timestamp, tz = "America/Los_Angeles", origin="1970-01-01")
+sampled_Feb = subset(sampled, Season == "February")
+sampled_Oct = subset(sampled, Season == "October")
+
+```
+
+
+```{r Feb/Mar plots}
+viridis(4)
+
+# all sample collection times as vertical lines
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() + # have to define first and then overlay again
+    geom_vline(xintercept = as.numeric(sampled_Feb$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) + # colors from viridis palette
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+# well 1 and 4 only (others were in the middle)
+sampled_Feb_W1W4 = subset(sampled_Feb, Well %in% c("W1", "W4"))
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W1W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+# well 1 only (to differentiate) # depth 2 since we always had data
+sampled_Feb_W1 = subset(sampled_Feb, Well == "W1" & Depth == "D2")
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W1$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_Feb_all_sampling.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 15, height = 10, dpi = 300)
+
+# well 4 only (to differentiate)
+sampled_Feb_W4 = subset(sampled_Feb, Well == "W4")
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+# well 1 and 4 different line type
+sampled_Feb_W4 = subset(sampled_Feb, Well == "W4")
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W4$dateFull), col = "grey", lty = 2)+
+    geom_vline(xintercept = as.numeric(sampled_Feb_W1$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+# only microbial sampling
+sampled_Feb_W1W4 = subset(sampled_Feb, Well %in% c("W1", "W4") & Depth == "D2" & SampleType == "Microbial")
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W1W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(legend.title = element_blank()) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+# both chemistry and microbial sampling
+sampled_Feb_W1 = subset(sampled_Feb, Well == "W1")
+sampled_Feb_W1_micro = subset(sampled_Feb, Well == "W1" & SampleType == "Microbial")
+
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W1$dateFull), col = "grey")+ # chem
+    geom_vline(xintercept = as.numeric(sampled_Feb_W1_micro$dateFull), col = "black")+ # micro
+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_Feb_micro_sampling.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 15, height = 10, dpi = 300)
+
+# no sampling vertical lines
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    #geom_vline(xintercept = as.numeric(sampled_Feb_W1W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(legend.title = element_blank()) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_Feb.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 15, height = 8, dpi = 300)
+
+```
+
+
+```{r October W1W4 plots}
+# W1 and W4
+ggplot(Oct, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    #geom_vline(xintercept = as.numeric(sampled_Feb_W1W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(legend.title = element_blank()) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_Oct.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 15, height = 8, dpi = 300)
+
+# Samples only from W1, D2, and M tide
+sampled_Oct_W1 = subset(sampled_Oct, Well == "W1" & Depth == "D2" & Tide != "M")
+Oct_trim = subset(Oct, ts > 1665462720)
+ggplot(Oct_trim, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Oct_W1$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_Oct_all_sampling.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 15, height = 10, dpi = 300)
+
+# well 4 only (to differentiate)
+sampled_Feb_W4 = subset(sampled_Feb, Well == "W4" & SampleType == "Microbial")
+ggplot(Feb, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    geom_vline(xintercept = as.numeric(sampled_Feb_W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_W1_W4_Feb_skinny.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 10, height = 10, dpi = 300)
+
+ggplot(Oct, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    scale_color_manual(values =  c("#440154FF", "#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    theme_bw()
+
+ggsave(filename = paste0(dirPath, "/water_level_figures", "/Stinson_water_W1_W4_Oct_skinny.png"), 
+       plot = last_plot(),
+       device = "png", units = "cm", width = 10, height = 10, dpi = 300)
+```
+
+
+```{r October all wells plots}
+Oct <- rbind.data.frame(Oct_W1, Oct_W2, Oct_W3, Oct_W4)
+ggplot(Oct, aes(dateFull, height_real, col=Location))+
+    geom_line() +
+    #geom_vline(xintercept = as.numeric(sampled_Feb_W1W4$dateFull), col = "grey")+
+    scale_color_manual(values =  c("#440154FF", "#35B779FF", "#FDE725FF","#31688EFF")) +
+    labs(x="", y="Water Height (m above MSL)")+
+    ylim(c(0.1,1.6)) +
+    geom_line() +
+    theme_bw() +
+    theme(legend.title = element_blank()) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank())
+
+```
+
+
+```{r plots shading in between lines}
+# with shading
+# https://www.nsgrantham.com/fill-between-two-lines-ggplot2
+# (not working yet but finish later) # need to interpolate with python so all points have a pair
+ribbonize <- function(.data, .x, .y, .f) {
+  # Calculate the ribbons required for geom_ribbon().
+  # For more info, visit nsgrantham.com/fill-between-two-lines-ggplot2
+  #
+  # Usage:
+  # df <- tibble(
+  #   x = c(1:8, 1:8),
+  #   y = c(1, 5, 6, 4, 1, 1, 3, 2, 1, 4, 5, 4, 2, 2, 2, 2),
+  #   f = c(rep("a", 8), rep("b", 8))
+  # )
+  #
+  # ribbons <- ribbonize(df, x, y, f)
+  #
+  # ggplot(df) +
+  #   geom_line(aes(x, y, linetype = f)) +
+  #   geom_ribbon(data = ribbons, aes(x, ymin = ymin, ymax = ymax, fill = fill))
+
+  # Check there are only 2 level in .f
+  levels <- .data %>%
+    pull({{ .f }}) %>%
+    unique()
+
+  stopifnot(length(levels) == 2)
+
+  # Check that there is exactly 1 observation per level in .f at every .x
+  level_counts_by_x <- .data %>%
+    filter(!is.na({{ .y }})) %>%
+    group_by({{ .x }}) %>%
+    count() %>%
+    pull(n)
+
+  stopifnot(all(level_counts_by_x == 2))
+
+  bounds <- .data %>%
+    mutate({{ .f }} := recode({{ .f }}, a = levels[1], b = levels[2])) %>%
+    pivot_wider(names_from = {{ .f }}, values_from = {{ .y }}) %>%
+    mutate(
+      ymax = pmax(a, b),
+      ymin = pmin(a, b),
+      fill = a >= b
+    )
+
+  intervals <- bounds %>%
+    filter(ymax > ymin) %>%
+    select(-a, -b)
+
+  intersections <- bounds %>%
+    mutate(lag_fill = lag(fill), lead_fill = lead(fill)) %>%
+    filter(ymax == ymin) %>%
+    select(-a, -b, -fill) %>%
+    pivot_longer(lag_fill:lead_fill, names_to = NULL, values_to = "fill") %>%
+    filter(!is.na(fill)) %>%
+    distinct()
+
+  other_intersections <- bounds %>%
+    transmute(
+      x1 = {{ .x }},       y1 = a,
+      x2 = lead({{ .x }}), y2 = lead(a),
+      x3 = {{ .x }},       y3 = b,
+      x4 = lead({{ .x }}), y4 = lead(b)
+    ) %>%
+    filter(((y1 > y3) & (y2 < y4)) | ((y1 < y3) & (y2 > y4))) %>%
+    mutate(
+      d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4),
+      u = x1 * y2 - y1 * x2,
+      v = x3 * y4 - y3 * x4,
+      x = (u * (x3 - x4) - v * (x1 - x2)) / d,
+      y = (u * (y3 - y4) - v * (y1 - y2)) / d
+    ) %>%
+    select(x, ymax = y, ymin = y)
+
+  bind_rows(
+    intervals,
+    intersections,
+    mutate(other_intersections, fill = TRUE),
+    mutate(other_intersections, fill = FALSE)
+  ) %>%
+    arrange({{ .x }})
+}
+
+library(lubridate)
+Feb$dateRound = round_date(Feb$dateFull, unit = "5 mins")
+rownames(Feb)<-c(1:nrow(Feb))
+
+Feb_trim = Feb[-c(1695:2767),]
+
+
+Feb_trim$Location = as.factor(Feb_trim$Location)
+Feb_trim$dateRound = as.numeric(Feb_trim$dateRound)
+
+ribbons <- ribbonize(Feb_trim, dateRound, height_real, Location)
+ggplot(Feb) +
+  geom_line(aes(dateFull, height_real, linetype = fLocation)) +
+  geom_ribbon(data = ribbons, aes(x, ymin = ymin, ymax = ymax, fill = fill))
+```
+
+
+
+```{r computing water head ~old~}
+# write trimmed files
+W1_lim = data.frame(ts = W1_real$ts, height_MSL = W1_real$height_real)
+W4_lim = data.frame(ts = W4_real$ts, height_MSL = W4_real$height_real)
+
+write.csv(W1_lim, "W1_real_pythonimport.csv", row.names = F)
+write.csv(W4_lim, "W4_real_pythonimport.csv", row.names = F)
+
+# resample in Jupyter NB python to 1 sec using ts (1 min resample not working in python)
+# upload python output
+W1_resample = read.csv("W1_real_pythonOutput_2022.08.15.csv") # might be uploaded to icloud (just click cloud icon in finder)
+W4_resample = read.csv("W4_real_pythonOutput_2022.08.15.csv")
+
+# remove date in GMT (from python)
+W1_resample = W1_resample[,-1]
+W4_resample = W4_resample[,-1]
+
+# convert date to Pacific (python output in GMT)
+W1_resample$dateFull = as.POSIXct(W1_resample$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+W4_resample$dateFull = as.POSIXct(W4_resample$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+# resample to 1 min
+library(dplyr)
+W1_resample_1min = W1_resample %>% group_by(date = cut(W1_resample$dateFull, "1 min")) %>% summarize(height_MSL = mean(height_MSL))
+W4_resample_1min = W4_resample %>% group_by(date = cut(W4_resample$dateFull, "1 min")) %>% summarize(height_MSL = mean(height_MSL))
+
+# assign well number
+W1_resample_1min$well = "W1"
+W4_resample_1min$well = "W4"
+
+# assign distance to well 1
+W1_resample_1min$distance_well1 = "0"
+W4_resample_1min$distance_well1 = "54.67" #keeping in ft for now
+
+# make a numeric ts
+W1_resample_1min$ts = as.numeric(as.POSIXct(W1_resample_1min$date))
+W4_resample_1min$ts = as.numeric(as.POSIXct(W4_resample_1min$date))
+
+# export the 1 min resample (load in below)
+#write.csv(W1_resample_1min, "W1_resample_1min.csv", row.names = F)
+#write.csv(W4_resample_1min, "W4_resample_1min.csv", row.names = F)
+
+# ----
+# load 1 min data 
+W1_resample_1min = read.csv("W1_resample_1min.csv")
+W4_resample_1min = read.csv("W4_resample_1min.csv")
+
+# compare W1 to W4 to estimate adjustments per well
+W1W4_rbind = rbind(W1_resample_1min, W4_resample_1min)
+W1W4_rbind$date = as.POSIXct(W1W4_rbind$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+p1 = 
+  ggplot(W1W4_rbind, aes(date, height_MSL, col=well))+
+    geom_point() +
+    ylab("Height Above MSL (m)") +
+    xlab("") +
+    theme_bw()
+p1
+ggsave("W1W4_compare_2022.08.31.pdf", p1,
+       units = "cm",
+       width = 15,
+       height = 10,
+       dpi = 300,
+       limitsize = FALSE)
+
+# match peaks to estimate delay, pulled out manually
+# W1 peaks ~2-3 h after W4
+W1_peak = c("2022-02-23 08:28:00", "2022-02-24 08:43:00", "2022-02-25 09:13:00",
+            "2022-02-26 10:58:00", "2022-02-27 11:48:00", "2022-02-28 11:43:00")
+W4_peak = c("2022-02-23 04:59:00", "2022-02-24 05:45:00", "2022-02-25 07:00:00", 
+            "2022-02-26 08:01:00", "2022-02-27 08:12:00","2022-02-28 09:15:00")
+delay = data.frame(W1_peak, W4_peak)
+
+delay$W1_peak = as.POSIXct(as.character(delay$W1_peak))
+delay$W4_peak = as.POSIXct(as.character(delay$W4_peak))
+
+delay$diff = delay$W1_peak - delay$W4_peak
+
+with(delay, plot(diff~W1_peak, ylab = "Delay of W1 relative to W4")) # cyclical...
+
+mean(delay$diff) # 2.947222, maybe just use 3 hour (180 min) delay? <- YES
+
+# Define the time shift for each well
+
+# shift = 180/54.67*distance
+# W4b: shift forward 3 hours/180 min (54.67 ft from W1)
+# W4: 208.2495 min (63.25 ft)
+# W3: 110.0348 min (33.42)
+# W2: 50.77007 min (15.42)
+
+W4b_shift = 180*60
+W4_shift = 208*60 # need to round to minutes to match sample data
+W3_shift = 110*60
+W2_shift = 51*60
+
+W4_shifted = W4_resample_1min
+W4_shifted$ts = W4_resample_1min$ts + W4b_shift 
+
+# plot again
+W1W4_rbind = rbind(W1_resample_1min, W4_shifted)
+W1W4_rbind$date = as.POSIXct(W1W4_rbind$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+ggplot(W1W4_rbind, aes(date, height_MSL, col=well))+
+    geom_point() +
+    ylab("Height Above MSL (m)") +
+    xlab("") +
+    theme_bw()
+
+# ----
+# adjust W4 ts using first and last peak match to W1 # REMOVE****
+# trim W1 and W4 to first and last (coordinating) peak
+delay$ts_W1 = as.numeric(delay$W1_peak)
+W1_times = c(delay$ts_W1[1]:delay$ts_W1[nrow(delay)])
+W1_sub = subset(W1_resample_1min, ts %in% W1_times) #7396
+
+delay$ts_W4 = as.numeric(delay$W4_peak)
+W4_times = c(delay$ts_W4[1]:delay$ts_W4[nrow(delay)])
+W4_sub = subset(W4_resample_1min, ts %in% W4_times) #7457
+
+# expand W1 to match W4 ts
+increment = (delay$ts_W4[nrow(delay)] - delay$ts_W4[1])/(nrow(W1_sub)-1)
+W1_sub$mult = as.numeric(rownames(W1_sub))-as.numeric(rownames(W1_sub)[1])
+W1_sub$W1_newtime = delay$ts_W4[1] + increment*W1_sub$mult # use this as ts for the model!
+
+# what would be the adjustment to get back to actual W1 ts?
+W1_sub$ts_origin = W1_sub$W1_newtime - (increment*W1_sub$mult) - (delay$ts_W4[1] - delay$ts_W1[1])
+  
+# compute for all W1 values
+
+
+W1_sub$ts = W1_sub$W1_newtime
+W1_sub_trim = W1_sub[,-c(6,7)]
+
+W1W4_rbind = rbind(W1_sub_trim, W4_sub)
+W1W4_rbind$distance_well1 = as.numeric(W1W4_rbind$distance_well1)
+W1W4_rbind$date = as.POSIXct(W1W4_rbind$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+ggplot(W1W4_rbind, aes(date, height_MSL, col=well))+
+    geom_point() +
+    ylab("Height Above MSL (m)") +
+    xlab("") +
+    theme_bw()
+# ----
+
+# Generalized model for height ~ time and distance
+library(mgcv)
+gam.mod <- gam(height_MSL ~ s(ts,distance_well1), data = W1W4_rbind)
+
+# Make data tables for other wells
+W2 = data.frame(ts = W1_resample_1min$ts, distance_well1 = as.numeric("15.42")) 
+W3 = data.frame(ts = W1_resample_1min$ts, distance_well1 = as.numeric("33.42")) 
+W4 = data.frame(ts = W1_resample_1min$ts, distance_well1 = as.numeric("63.25")) 
+
+# Predict new data using the GAM
+W2$height_MSL = predict(gam.mod, newdata=W2, type="link")
+W3$height_MSL = predict(gam.mod, newdata=W3, type="link")
+W4$height_MSL = predict(gam.mod, newdata=W4, type="link")
+
+# assign well (has to be the last column to match W1 and W4b)
+W2$well = "W2"
+W3$well = "W3"
+W4$well = "W4"
+
+W1 <- W1_resample_1min[, c("ts", "distance_well1", "height_MSL", "well")]
+W4b <- W4_shifted[, c("ts", "distance_well1", "height_MSL", "well")]
+
+W4b$well = "W4b"
+allWell_rbind = rbind(W1, W4b, W2, W3, W4)
+allWell_rbind$date = as.POSIXct(allWell_rbind$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+ggplot(allWell_rbind, aes(date, height_MSL, col=well))+
+    geom_point() +
+    ylab("Height Above MSL (m)") +
+    xlab("") +
+    theme_bw()
+
+# Incorporate time shift
+W2$ts = W2$ts - W2_shift
+W3$ts = W3$ts - W3_shift
+W4$ts = W4$ts - W4_shift
+W4b$ts = W4b$ts - W4b_shift
+
+allWell_rbind = rbind(W1, W4b, W2, W3, W4)
+allWell_rbind$date = as.POSIXct(allWell_rbind$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+ggplot(allWell_rbind, aes(date, height_MSL, col=well))+
+    geom_point() +
+    ylab("Height Above MSL (m)") +
+    xlab("") +
+    theme_bw()
+
+# plot depths of sampling ports for each well
+W1_resample_1min$date = as.POSIXct(W1_resample_1min$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+ggplot(W1_resample_1min, aes(date, height_MSL))+
+    geom_point() +
+    ylab("Height Above MSL (m)") +
+    xlab("") +
+    theme_bw() +
+    geom_hline(yintercept=c(0.841, 0.536, -0.034, -0.579))
+
+# compute water head from port level and water level
+ports = read.csv("Data_Stinson_2022.csv")
+ports$fullDate = paste(ports$date, " ", ports$time)
+
+# W1
+W1_ports = subset(ports, Well == c("W1"))
+W1_ports$fullDate = as.POSIXct(as.character(W1_ports$fullDate), tz = "America/Los_Angeles", origin="1970-01-01")
+
+W1$fullDate = as.POSIXct(W1$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+W1_all = left_join(W1_ports, W1, by = "fullDate")
+W1_all$water_height_m = W1_all$height_MSL - W1_all$depth_m
+
+W1_merge = data.frame(sample = W1_all$sample, date = W1_all$fullDate, tide = W1_all$Tide, well = W1_all$Well, depth = W1_all$Depth, depth_MSL_m = W1_all$depth_m, water_MSL_m = W1_all$height_MSL, water_head_m = W1_all$water_height_m)
+
+# W2
+W2_ports = subset(ports, Well == c("W2"))
+W2_ports$fullDate = as.POSIXct(as.character(W2_ports$fullDate), tz = "America/Los_Angeles", origin="1970-01-01")
+W2_ports$ts = as.numeric(W2_ports$fullDate2)
+
+W2$fullDate = as.POSIXct(W2$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+W2_all = left_join(W2_ports, W2, by = "fullDate")
+W2_all$water_height_m = W2_all$height_MSL - W2_all$depth_m
+
+W2_merge = data.frame(sample = W2_all$sample, date = W2_all$fullDate, tide = W2_all$Tide, well = W2_all$Well, depth = W2_all$Depth, depth_MSL_m = W2_all$depth_m, water_MSL_m = W2_all$height_MSL, water_head_m = W2_all$water_height_m)
+
+# W3
+W3_ports = subset(ports, Well == c("W3"))
+W3_ports$fullDate = as.POSIXct(as.character(W3_ports$fullDate), tz = "America/Los_Angeles", origin="1970-01-01")
+
+W3$fullDate = as.POSIXct(W3$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+W3_all = left_join(W3_ports, W3, by = "fullDate")
+W3_all$water_height_m = W3_all$height_MSL - W3_all$depth_m
+
+W3_merge = data.frame(sample = W3_all$sample, date = W3_all$fullDate, tide = W3_all$Tide, well = W3_all$Well, depth = W3_all$Depth, depth_MSL_m = W3_all$depth_m, water_MSL_m = W3_all$height_MSL, water_head_m = W3_all$water_height_m)
+
+# W4
+W4_ports = subset(ports, Well == c("W4"))
+W4_ports$fullDate = as.POSIXct(as.character(W4_ports$fullDate), tz = "America/Los_Angeles", origin="1970-01-01")
+
+W4$fullDate = as.POSIXct(W4$ts, tz = "America/Los_Angeles", origin="1970-01-01") 
+
+W4_all = left_join(W4_ports, W4, by = "fullDate")
+W4_all$water_height_m = W4_all$height_MSL - W4_all$depth_m
+
+W4_merge = data.frame(sample = W4_all$sample, date = W4_all$fullDate, tide = W4_all$Tide, well = W4_all$Well, depth = W4_all$Depth, depth_MSL_m = W4_all$depth_m, water_MSL_m = W4_all$height_MSL, water_head_m = W4_all$water_height_m)
+
+# write table
+water_level = rbind(W1_merge, W2_merge, W3_merge, W4_merge)
+water_level = water_level %>% arrange(water_level$date)
+write.csv(water_level, "Stinson_Feb_2022_Water_Level_2022.08.22.csv", row.names = F)
+```
+
